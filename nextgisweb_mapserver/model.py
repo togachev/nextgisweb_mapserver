@@ -139,13 +139,7 @@ class MapserverStyle(Base, Resource):
             )
 
         legend = E.legend(
-            E.keysize(x='18', y='18'),
-            E.keyspacing(x='0', y='0'),
-            E.label(
-                E.size('12'),
-                E.type('truetype'),
-                E.font('regular')
-            )
+            E.keysize(x='18', y='18'), E.keyspacing(x='0', y='0'), E.label(E.size('12'), E.type('truetype'), E.font('regular'))
         )
 
         root = E.map(E.layer(E('class', E.name('⁣'), style)), legend)
