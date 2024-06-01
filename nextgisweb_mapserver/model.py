@@ -223,7 +223,7 @@ class MapserverStyle(Base, Resource):
         buf.write(gdimg.getBytes())
         image = Image.open(buf)
         buf_resize = BytesIO()
-        image.save(buf_resize, 'webp')
+        image.save(buf_resize, "png")
         buf_resize.seek(0)
         return buf_resize
 
@@ -232,17 +232,18 @@ class MapserverStyle(Base, Resource):
         gdimg = mapobj.drawLegend()
         buf = BytesIO()
         buf.write(gdimg.getBytes())
-
         
         image = Image.open(buf)
         buf_resize = BytesIO()
         border = (4, 4, 4, 4) # left, up, right, bottom
         image = ImageOps.crop(image, border)
-        image.save(buf_resize, 'webp')
+        image.save(buf_resize, "png")
         buf_resize.seek(0)
 
         return [
             LegendSymbol(
+                index=0,
+                render=True,
                 display_name=None,
                 icon=Image.open(buf_resize)
             )
