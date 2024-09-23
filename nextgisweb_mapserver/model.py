@@ -7,7 +7,7 @@ import mapscript
 import sqlalchemy as sa
 from lxml import etree
 from lxml.builder import ElementMaker
-from PIL import Image
+from PIL import Image, ImageOps
 from zope.interface import implementer
 
 from nextgisweb.env import Base, env, gettext
@@ -19,6 +19,8 @@ from nextgisweb.render import (
     ILegendableStyle,
     IRenderableStyle,
     ITileRenderRequest,
+    ILegendSymbols,
+    LegendSymbol,
 )
 from nextgisweb.resource import DataScope, Resource, ResourceScope, SColumn, Serializer
 from nextgisweb.resource.exception import ValidationError
@@ -57,7 +59,7 @@ class RenderRequest(object):
         return self.style.render_image(self.srs, extent, (size, size), self.cond, padding=size / 2)
 
 
-@implementer((IRenderableStyle, ILegendableStyle))
+@implementer((IRenderableStyle, ILegendableStyle, ILegendSymbols))
 class MapserverStyle(Base, Resource):
     identity = "mapserver_style"
     cls_display_name = gettext("MapServer style")
@@ -88,16 +90,46 @@ class MapserverStyle(Base, Resource):
 
         E = ElementMaker()
 
-        style = E.style(
-            E.color(dict(zip(("red", "green", "blue"), map(str, color)))),
-            E.outlinecolor(red="64", green="64", blue="64"),
-        )
+        if layer.geometry_type in (
+            GEOM_TYPE.POINT, GEOM_TYPE.MULTIPOINT,
+            GEOM_TYPE.POINTZ, GEOM_TYPE.MULTIPOINTZ
+        ):
+            style = E.style(
+                E.color(dict(zip(
+                    ("red", "green", "blue"), map(str, choice(_RNDCOLOR))
+                ))),
+                E.outlinecolor(red="64", green="64", blue="64"),
+                E.outlinewidth("1")
+            )
+        elif layer.geometry_type in (
+            GEOM_TYPE.LINESTRING, GEOM_TYPE.MULTILINESTRING,
+            GEOM_TYPE.MULTILINESTRINGZ, GEOM_TYPE.LINESTRINGZ
+        ):
+            style = E.style(
+                E.color(dict(zip(
+                    ("red", "green", "blue"), map(str, choice(_RNDCOLOR))
+                ))),
+                E.outlinecolor(red="64", green="184", blue="184"),
+                E.outlinewidth("1"),
+                E.width("1"),
+                E.linejoin("round"),
+                E.linecap("round")
+            )
+        else:
+            style = E.style(
+                E.color(dict(zip(
+                    ("red", "green", "blue"), map(str, choice(_RNDCOLOR))
+                ))),
+                E.outlinecolor(red="64", green="64", blue="64"),
+                E.opacity("50"),
+                E.outlinewidth("1"),
+            )
 
         legend = E.legend(
-            E.keysize(x="15", y="15"), E.label(E.size("12"), E.type("truetype"), E.font("regular"))
+            E.keysize(x="18", y="18"), E.keyspacing(x="0", y="0"), E.label(E.size("12"), E.type("truetype"), E.font("regular"))
         )
 
-        root = E.map(E.layer(E("class", style)), legend)
+        root = E.map(E.layer(E("class", E.name("⁣"), style)), legend)
 
         if layer.geometry_type in (
             GEOM_TYPE.POINT,
@@ -174,12 +206,38 @@ class MapserverStyle(Base, Resource):
     def render_legend(self):
         mapobj = self._mapobj(features=[])
         gdimg = mapobj.drawLegend()
-
         buf = BytesIO()
         buf.write(gdimg.getBytes())
-        buf.seek(0)
+        image = Image.open(buf)
+        buf_resize = BytesIO()
+        image.save(buf_resize, "png")
+        buf_resize.seek(0)
+        return buf_resize
 
-        return buf
+    def legend_symbols(self, icon_size):
+        mapobj = self._mapobj(features=[])
+        gdimg = mapobj.drawLegend()
+        buf = BytesIO()
+        buf.write(gdimg.getBytes())
+        
+        image = Image.open(buf)
+        buf_resize = BytesIO()
+        if self.feature_layer.geometry_type == "POINT":
+            border = (0, 0, 4, 0) # left, up, right, bottom
+        else:
+            border = (0, 0, 0, 0) # left, up, right, bottom
+        image = ImageOps.crop(image, border)
+        image.save(buf_resize, "png")
+        buf_resize.seek(0)
+
+        return [
+            LegendSymbol(
+                index=0,
+                render=True,
+                display_name=None,
+                icon=Image.open(buf_resize)
+            )
+        ]
 
     def _mapobj(self, features):
         # tmpf = NamedTemporaryFile(suffix='.map')
