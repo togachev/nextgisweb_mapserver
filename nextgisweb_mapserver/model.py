@@ -168,8 +168,9 @@ class MapserverStyle(Base, Resource):
 
         feature_query = self.parent.feature_query()
 
+        # Apply filter condition
         if cond is not None:
-            feature_query.filter_by(**cond)
+            feature_query.filter(*cond)
 
         feature_query.srs(srs)
 
