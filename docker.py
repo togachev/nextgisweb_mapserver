@@ -35,8 +35,7 @@ def on_virtualenv(event):
         "    cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DLINK_STATIC_LIBMAPSERVER=ON "
         + "-DWITH_PROTOBUFC=OFF -DWITH_FRIBIDI=OFF -DWITH_HARFBUZZ=OFF -DWITH_CAIRO=OFF "
         + "-DWITH_FCGI=OFF -DWITH_POSTGIS=OFF -DWITH_WFS=OFF -DWITH_WCS=OFF -DWITH_LIBXML2=OFF "
-        + "-DWITH_PYTHON=ON -DPYTHON_EXECUTABLE={}/bin/python ../ ".format(event.path)
-        + " > ../configure.out.txt && make",
+        + "-DWITH_PYTHON=ON ../ > ../configure.out.txt && make",
         "    {}/bin/pip install --no-cache-dir src/mapscript/python".format(event.path),
         "    rm -rf /tmp/mapserver",
         ")",
