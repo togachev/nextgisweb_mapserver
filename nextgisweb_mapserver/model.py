@@ -13,7 +13,7 @@ from zope.interface import implementer
 from nextgisweb.env import env, gettext
 from nextgisweb.lib.geometry import Geometry
 
-from nextgisweb.feature_layer import GEOM_TYPE, IFeatureLayer
+from nextgisweb.feature_layer import GEOM_TYPE, IFeatureLayer, IFilterableFeatureLayer
 from nextgisweb.render import (
     IExtentRenderRequest,
     ILegendableStyle,
@@ -45,18 +45,22 @@ _RNDCOLOR = (
 
 
 @implementer(IExtentRenderRequest, ITileRenderRequest)
-class RenderRequest(object):
+class RenderRequest:
     def __init__(self, style, srs, cond):
         self.style = style
         self.srs = srs
-        self.cond = cond
+        self.params = dict()
+        if cond is not None:
+            if "filter" in cond:
+                self.params["feature_filter"] = cond["filter"]
 
     def render_extent(self, extent, size):
-        return self.style.render_image(self.srs, extent, size, self.cond)
+        return self.style.render_image(self.srs, extent, size, **self.params)
 
     def render_tile(self, tile, size):
         extent = self.srs.tile_extent(tile)
-        return self.style.render_image(self.srs, extent, (size, size), self.cond, padding=size / 2)
+        params = dict(self.params, padding=size / 2)
+        return self.style.render_image(self.srs, extent, (size, size), **params)
 
 
 @implementer((IRenderableStyle, ILegendableStyle, ILegendSymbols))
@@ -151,7 +155,7 @@ class MapserverStyle(Resource):
 
         return etree.tostring(root, pretty_print=True, encoding="unicode")
 
-    def render_image(self, srs, extent, size, cond, padding=0):
+    def render_image(self, srs, extent, size, *, feature_filter=None, padding=0):
         res_x = (extent[2] - extent[0]) / size[0]
         res_y = (extent[3] - extent[1]) / size[1]
 
@@ -166,10 +170,12 @@ class MapserverStyle(Resource):
 
         target_box = (padding, padding, size[0] + padding, size[1] + padding)
 
-        feature_query = self.parent.feature_query()
+        feature_layer = self.parent
+        feature_query = feature_layer.feature_query()
 
-        if cond is not None:
-            feature_query.filter_by(**cond)
+        if feature_filter is not None and IFilterableFeatureLayer.providedBy(feature_layer):
+            filter_program = feature_layer.filter_parser.parse(feature_filter)
+            feature_query.set_filter_program(filter_program)
 
         feature_query.srs(srs)
 
@@ -186,7 +192,7 @@ class MapserverStyle(Resource):
         req.setParameter("bbox", ",".join(map(str, extended if padding else extent)))
         req.setParameter("width", str(render_size[0]))
         req.setParameter("height", str(render_size[1]))
-        req.setParameter("srs", "EPSG:%d" % self.parent.srs_id)
+        req.setParameter("srs", "EPSG:%d" % feature_layer.srs_id)
         req.setParameter("format", "image/png")
         req.setParameter("layers", "main")
         req.setParameter("request", "GetMap")
